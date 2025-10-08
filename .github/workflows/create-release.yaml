@@ -1,0 +1,75 @@
+name: Create release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  create_release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # 1. 获取当前日期 (YYYYMMDD) 并将其设置为环境变量
+      - name: Set current date environment variable
+        run: echo "TODAY_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
+
+      # 2. 计算下一个 Release 序号
+      - name: Calculate next sequential release number
+        id: calculate_tag
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const today = process.env.TODAY_DATE;
+            const prefix = `${today}.`;
+            let maxSuffix = 0;
+
+            // 1. 获取已有的 Releases
+            // 注意：我们只查询前100个 Releases，如果一天内发布超过100次，可能需要更复杂的循环分页逻辑。
+            const { data: releases } = await github.rest.repos.listReleases({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100
+            });
+
+            // 2. 遍历 Releases，找到今天最大的序号
+            for (const release of releases) {
+                // 检查 tag_name 是否以今天的日期开头 (e.g., 20241201.)
+                if (release.tag_name && release.tag_name.startsWith(prefix)) {
+                    // 提取点号后面的数字
+                    const suffixStr = release.tag_name.substring(prefix.length);
+                    const suffixNum = parseInt(suffixStr, 10);
+                    
+                    if (!isNaN(suffixNum)) {
+                        maxSuffix = Math.max(maxSuffix, suffixNum);
+                    }
+                }
+            }
+
+            const nextSuffix = maxSuffix + 1;
+            const newTagName = `${today}.${nextSuffix}`;
+
+            console.log(`Calculated next release tag: ${newTagName}`);
+
+            // 3. 将计算出的标签名设置为步骤输出
+            core.setOutput('calculated_tag_name', newTagName);
+
+      - name: Generate release assets
+        run: |
+          # Example command to generate release assets
+          date +%Y-%m-%d_%H:%M:%S > release.txt
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          # 使用步骤 2 计算出的标签名作为 Release 名称和 Tag 名称
+          name: Release ${{ steps.calculate_tag.outputs.calculated_tag_name }}
+          tag_name: ${{ steps.calculate_tag.outputs.calculated_tag_name }}
+          files: |
+            release.txt

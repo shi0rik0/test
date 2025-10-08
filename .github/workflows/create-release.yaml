@@ -70,6 +70,5 @@ jobs:
         with:
           # 使用步骤 2 计算出的标签名作为 Release 名称和 Tag 名称
           name: Release ${{ steps.calculate_tag.outputs.calculated_tag_name }}
-          tag_name: ${{ steps.calculate_tag.outputs.calculated_tag_name }}
           files: |
             release.txt
